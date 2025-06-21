@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>エンクロージャー設計支援ツール</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            'acc-bg': '#f8f9fa',
+            'acc-surface': '#ffffff',
+            'acc-text': '#212529',
+            'acc-text-light': '#495057',
+            'acc-border': '#ced4da',
+            'acc-primary': '#005fcc',
+            'acc-primary-text': '#ffffff',
+            'acc-accent': '#f0ad4e',
+            'acc-accent-text': '#111111',
+          }
+        },
+      },
+    }
+  </script>
+  <style>
+    body { 
+      font-family: 'Inter', sans-serif;
+      background-color: #f8f9fa;
+      color: #212529;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 20px; height: 20px;
+      background: #005fcc;
+      cursor: pointer;
+      border-radius: 50%; border: 2px solid white;
+    }
+    input[type=range]:disabled::-webkit-slider-thumb { background: #9ca3af; }
+    
+    @page {
+        size: A4 portrait; 
+        margin: 5mm;
+    }
+
+    @media print {
+      html, body {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          width: 100%; height: 100%;
+          overflow: hidden !important;
+      }
+      * { box-sizing: border-box; }
+
+      body * { visibility: hidden; }
+      #print-area, #print-area * { visibility: visible; }
+      
+      #print-area {
+        position: absolute; left: 0; top: 0;
+        width: 100%; height: 100%;
+        font-family: 'Inter', sans-serif;
+        font-size: 7pt; 
+        color: #000;
+        background: #fff !important;
+      }
+
+      .print-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 2mm; 
+        height: 100%; width: 100%;
+      }
+
+      .print-section {
+        border: 1px solid #333 !important;
+        border-radius: 6px; 
+        padding: 2mm; 
+        background: #fff !important;
+        overflow: hidden;
+        display: flex; flex-direction: column;
+        break-inside: avoid;
+      }
+      .print-section * {
+          background-color: transparent !important;
+          color: #000 !important;
+          border-color: #ccc !important;
+      }
+      .print-section h3, .print-section h4 {
+        font-size: 8pt; 
+        font-weight: 700; 
+        margin-bottom: 1mm; 
+        padding-bottom: 0.5mm;
+        border-bottom: 1px solid #eee;
+      }
+      .print-section svg {
+        width: 100%; height: 100%;
+        flex-grow: 1;
+        background: #fff !important;
+      }
+      .print-section svg text, .print-section svg g text { 
+        fill: #000 !important; 
+        stroke: none !important; 
+        font-size: 7px; 
+      }
+      .print-section svg rect, .print-section svg circle, .print-section svg line, .print-section svg path, .print-section svg g[stroke] {
+          stroke: #000 !important;
+      }
+      .print-section svg circle { fill: none !important; stroke-width: 1 !important; }
+      .print-section svg path { fill: none !important; }
+
+      .print-info-area { flex-shrink: 0; }
+      .print-info-area .summary-item, 
+      .print-info-area .print-cutting-section {
+          margin-bottom: 0.5mm;
+      }
+      .print-info-area h4 { 
+          font-size: 7pt !important;
+          margin-bottom: 0.5mm !important;
+      }
+      .print-info-area p, .print-info-area span, .print-info-area div {
+          font-size: 6pt !important;
+          line-height: 1.2 !important;
+      }
+      .print-info-area .py-2 { padding-top: 0.3mm !important; padding-bottom: 0.3mm !important; }
+
+      .print-memo-section {
+          flex-grow: 1; 
+          display: flex;
+          flex-direction: column;
+          margin-top: 1mm;
+          min-height: 15mm;
+          max-height: 100mm;
+      }
+      .print-memo-section h4 { 
+          font-size: 7pt !important; 
+          font-weight: 700;
+          margin-bottom: 0.5mm !important; 
+          border-bottom: 1px solid #eee !important;
+          padding-bottom: 0.3mm;
+       }
+    }
+  </style>
+</head>
+<body class="bg-acc-bg text-acc-text">
+  <input type="file" id="import-json-input" class="hidden" accept="application/json">
+  <div id="root">
+    <div class="min-h-screen">
+      <!-- ヘッダー -->
+      <header class="bg-acc-surface shadow-md">
+        <div class="max-w-7xl mx-auto px-6 py-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="p-3 bg-acc-primary rounded-2xl shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-acc-primary-text"><rect width="16" height="20" x="4" y="2" rx="2"></rect><line x1="8" x2="16" y1="6" y2="6"></line><line x1="16" x2="16" y1="14" y2="18"></line><path d="M16 10h.01M12 10h.01M8 10h.01M12 14h.01M8 14h.01M12 18h.01M8 18h.01"></path></svg>
+              </div>
+              <div>
+                <h1 class="text-3xl font-bold text-acc-text">スピーカーエンクロージャー設計ツール</h1>
+                <p class="text-acc-text-light">板厚や目標容積、ユニットの配置などをリアルタイムに調整し、最適な設計図を作成します。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- メインコンテンツ -->
+      <main class="max-w-7xl mx-auto px-6 pb-12">
+        <div id="main-toolbar" class="flex flex-wrap items-center gap-2 my-8 border-b border-acc-border pb-4">
+            <button id="tab-design" class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all"></button>
+            <button id="tab-technical" class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all"></button>
+            <div class="flex-grow"></div>
+            <button id="import-json-btn" class="flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm" title="設定読み込み">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <span>設定読み込み</span>
+            </button>
+            <button id="export-json-btn" class="flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm" title="設定保存">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>設定保存</span>
+            </button>
+            <button id="print-btn" class="flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 bg-acc-primary text-acc-primary-text hover:opacity-90 text-sm" title="印刷">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14"></rect></svg>
+                <span>印刷</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <aside id="settings-panel" class="space-y-6">
+            <section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">
+              <h3 class="text-lg font-bold mb-6 text-acc-text">基本設定</h3>
+              <div class="space-y-6">
+                <div><label class="block text-sm font-semibold mb-3 text-acc-text-light">板厚(mm)</label><input id="board-thickness-slider" type="range" min="9" max="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"><div class="flex justify-between text-sm mt-2"><span class="text-acc-text-light">9</span><span id="board-thickness-value" class="font-bold text-acc-text"></span><span class="text-acc-text-light">30</span></div></div>
+                <div><label class="block text-sm font-semibold mb-3 text-acc-text-light">目標容積(L)</label><input id="target-volume-slider" type="range" min="5" max="100" step="0.5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"><div class="flex justify-between text-sm mt-2"><span class="text-acc-text-light">5</span><span id="target-volume-value" class="font-bold text-acc-text"></span><span class="text-acc-text-light">100</span></div></div>
+              </div>
+            </section>
+            <section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">
+              <h3 class="text-lg font-bold mb-6 text-acc-text">寸法調整</h3>
+              <div class="mb-6"><div class="flex items-center justify-between mb-3"><label class="text-sm font-semibold text-acc-text-light">幅(mm)</label><button id="width-lock" class="p-2 rounded-lg"></button></div><div class="flex items-center gap-3"><input id="width-slider" type="range" min="100" max="800" class="flex-1 h-2 bg-gray-200 rounded-lg"><input id="width-input" type="number" class="w-20 px-3 py-2 rounded-lg border font-mono text-sm bg-gray-100 border-acc-border text-acc-text"></div></div>
+              <div class="mb-6"><div class="flex items-center justify-between mb-3"><label class="text-sm font-semibold text-acc-text-light">高さ(mm)</label><button id="height-lock" class="p-2 rounded-lg"></button></div><div class="flex items-center gap-3"><input id="height-slider" type="range" min="100" max="800" class="flex-1 h-2 bg-gray-200 rounded-lg"><input id="height-input" type="number" class="w-20 px-3 py-2 rounded-lg border font-mono text-sm bg-gray-100 border-acc-border text-acc-text"></div></div>
+              <div><div class="flex items-center justify-between mb-3"><label class="text-sm font-semibold text-acc-text-light">奥行(mm)</label><button id="depth-lock" class="p-2 rounded-lg"></button></div><div class="flex items-center gap-3"><input id="depth-slider" type="range" min="100" max="800" class="flex-1 h-2 bg-gray-200 rounded-lg"><input id="depth-input" type="number" class="w-20 px-3 py-2 rounded-lg border font-mono text-sm bg-gray-100 border-acc-border text-acc-text"></div></div>
+            </section>
+            <section id="speaker-settings-card" class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm"></section>
+            <section id="port-settings-card" class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm"></section>
+          </aside>
+          <div id="main-content" class="lg:col-span-2 space-y-6"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- 状態管理 ---
+        let state = {
+            boardThickness: 18, targetVolume: 20,
+            dimensions: { width: 300, height: 485, depth: 240 },
+            locks: { width: false, height: false, depth: false },
+            speakers: [
+                { id: 1, diameter: 165, x: 50, y: 25, name: 'ウーファー', type: 'woofer', panel: 'front', dimOptions: { diameter: true, fromTopEdge: false, fromBottomEdge: false, fromLeftEdge: false, fromRightEdge: false } },
+                { id: 2, diameter: 75, x: 50, y: 75, name: 'ツイーター', type: 'tweeter', panel: 'front', dimOptions: { diameter: true, fromTopEdge: false, fromBottomEdge: false, fromLeftEdge: false, fromRightEdge: false } }
+            ],
+            port: { enabled: true, diameter: 50, length: 100, x: 50, y: 90, panel: 'back', dimOptions: { diameter: true, fromTopEdge: false, fromBottomEdge: false, fromLeftEdge: false, fromRightEdge: false } },
+            activeTab: 'technical', selectedPanel: 'front',
+            aspectRatio: { width: 1, height: 1.618, depth: 0.8 },
+            calculations: {},
+            globalDimensionOptions: { holeToHole: true },
+        };
+
+        const icons = {
+            lock: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`,
+            unlock: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`,
+            settings: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-4.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.44.25a2 2 0 0 1-2 1.73V20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.28a2 2 0 0 1-2-1.73l-.44-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
+            calculator: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01M12 10h.01M8 10h.01M12 14h.01M8 14h.01M12 18h.01M8 18h.01"/></svg>`,
+        };
+
+        const sel = id => document.getElementById(id);
+        const elements = {
+            boardThicknessSlider: sel('board-thickness-slider'), boardThicknessValue: sel('board-thickness-value'),
+            targetVolumeSlider: sel('target-volume-slider'), targetVolumeValue: sel('target-volume-value'),
+            width: { slider: sel('width-slider'), input: sel('width-input'), lock: sel('width-lock') },
+            height: { slider: sel('height-slider'), input: sel('height-input'), lock: sel('height-lock') },
+            depth: { slider: sel('depth-slider'), input: sel('depth-input'), lock: sel('depth-lock') },
+            mainContent: sel('main-content'), tabDesign: sel('tab-design'), tabTechnical: sel('tab-technical'),
+            speakerSettingsCard: sel('speaker-settings-card'), portSettingsCard: sel('port-settings-card'),
+            importJsonInput: sel('import-json-input'),
+            importJsonBtn: sel('import-json-btn'),
+            exportJsonBtn: sel('export-json-btn'),
+            printBtn: sel('print-btn'),
+        };
+
+        function addEventListeners() {
+            elements.boardThicknessSlider.oninput = e => { state.boardThickness = Number(e.target.value); update(); };
+            elements.targetVolumeSlider.oninput = e => { state.targetVolume = Number(e.target.value); update({ source: 'volume' }); };
+            ['width', 'height', 'depth'].forEach(dim => {
+                const handler = e => { if (!state.locks[dim]) { state.dimensions[dim] = Number(e.target.value); update({ source: 'dimension' }); } };
+                elements[dim].slider.oninput = handler;
+                elements[dim].input.onchange = handler;
+                elements[dim].lock.onclick = () => { state.locks[dim] = !state.locks[dim]; if (!state.locks[dim]) { update({ source: 'volume' }); } else { update(); } };
+            });
+            elements.tabDesign.onclick = () => { state.activeTab = 'design'; update(); };
+            elements.tabTechnical.onclick = () => { state.activeTab = 'technical'; update(); };
+            elements.importJsonBtn.onclick = () => elements.importJsonInput.click();
+            elements.importJsonInput.onchange = importJSON;
+            elements.exportJsonBtn.onclick = exportJSON;
+            elements.printBtn.onclick = printDesign;
+        }
+        
+        function calculateAll(options = {}) {
+            const { source } = options;
+            if (source === 'volume' && Object.values(state.locks).every(v => !v)) {
+                const volMM3 = state.targetVolume * 1e6;
+                const r = state.aspectRatio;
+                const scale = Math.cbrt(volMM3 / (r.width * r.height * r.depth));
+                state.dimensions = { width: r.width * scale, height: r.height * scale, depth: r.depth * scale };
+            }
+            const { width, height, depth } = state.dimensions;
+            const bt = state.boardThickness;
+            const iW = width - 2 * bt, iH = height - 2 * bt, iD = depth - 2 * bt;
+            const vol = Math.max(0, (iW * iH * iD) / 1e6);
+            if (source === 'dimension') {
+                state.targetVolume = vol;
+            }
+            let portVolRed = 0, resFreq = 0;
+            if (state.port.enabled) {
+                const p = state.port;
+                portVolRed = (Math.PI * (p.diameter / 2)**2 * p.length) / 1e6;
+                const netVol = vol - portVolRed;
+                if (netVol > 0) {
+                    const effLen = p.length + 0.8 * p.diameter;
+                    const portArea = Math.PI * (p.diameter / 2)**2 / 1e6;
+                    resFreq = (343 / (2 * Math.PI)) * Math.sqrt(portArea / ((effLen / 1000) * (netVol / 1000)));
+                }
+            }
+            const panels = [ { name: '前面板', width, height, qty: 1 }, { name: '背面板', width, height, qty: 1 }, { name: '側面板', width: depth, height, qty: 2 }, { name: '上下面板', width: iW, height: depth, qty: 2 }];
+            state.calculations = { innerDimensions: { width: iW, height: iH, depth: iD }, volume: vol, netVolume: vol - portVolRed, resonantFreq: resFreq, panels, totalArea: panels.reduce((s, p) => s + (p.width * p.height * p.qty), 0) / 1e6 };
+        }
+
+        function getUnitColor() { return '#212529'; }
+
+        function renderSettings() {
+            let speakerHTML = `<div class="flex items-center justify-between mb-6"><h3 class="text-lg font-bold text-acc-text">スピーカー設定</h3><button id="add-speaker-btn" class="px-4 py-2 bg-acc-primary text-acc-primary-text rounded-lg hover:opacity-90 transition-all">追加</button></div><div id="speaker-list" class="space-y-4"></div>`;
+            elements.speakerSettingsCard.innerHTML = speakerHTML;
+            const speakerList = sel('speaker-list');
+            state.speakers.forEach(s => {
+                const dimOptions = s.dimOptions || { diameter: true, fromTopEdge: true, fromBottomEdge: false, fromLeftEdge: true, fromRightEdge: false };
+                speakerList.innerHTML += `
+                    <div class="p-4 rounded-xl border bg-acc-bg border-acc-border">
+                        <div class="flex items-center justify-between mb-3"><input type="text" value="${s.name}" placeholder="ユニット名" data-id="${s.id}" data-field="name" class="speaker-prop font-semibold border-none bg-transparent text-acc-text w-full"><button class="remove-speaker-btn text-red-600 hover:text-red-700 text-sm" data-id="${s.id}">削除</button></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="block text-xs mb-1 text-acc-text-light">直径(mm)</label><input type="number" value="${s.diameter}" data-id="${s.id}" data-field="diameter" class="speaker-prop w-full px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div>
+                            <div><label class="block text-xs mb-1 text-acc-text-light">配置</label><select data-id="${s.id}" data-field="panel" class="speaker-prop w-full px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"><option value="front" ${s.panel === 'front' ? 'selected' : ''}>前面</option><option value="back" ${s.panel === 'back' ? 'selected' : ''}>背面</option></select></div>
+                        </div>
+                        <div class="mt-3"><label class="block text-xs mb-1 text-acc-text-light">X: ${s.x}%</label><div class="flex items-center gap-2"><input type="range" min="0" max="100" value="${s.x}" data-id="${s.id}" data-field="x" class="speaker-prop w-full"><input type="number" min="0" max="100" value="${s.x}" data-id="${s.id}" data-field="x" class="speaker-prop w-20 px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div></div>
+                        <div class="mt-3"><label class="block text-xs mb-1 text-acc-text-light">Y: ${s.y}%</label><div class="flex items-center gap-2"><input type="range" min="0" max="100" value="${s.y}" data-id="${s.id}" data-field="y" class="speaker-prop w-full"><input type="number" min="0" max="100" value="${s.y}" data-id="${s.id}" data-field="y" class="speaker-prop w-20 px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div></div>
+                        <details class="mt-3"><summary class="cursor-pointer text-sm font-medium text-acc-text-light hover:text-acc-text py-1">詳細な寸法設定</summary><div class="pt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+                            ${Object.keys(dimOptions).map(key => `<label class="flex items-center gap-1.5 text-sm text-acc-text-light"><input type="checkbox" data-id="${s.id}" data-dim-option="${key}" class="speaker-dim-cb w-4 h-4 rounded text-acc-primary" ${dimOptions[key] ? 'checked' : ''}>${{'diameter':'直径', 'fromTopEdge':'上から', 'fromBottomEdge':'下から', 'fromLeftEdge':'左から', 'fromRightEdge':'右から'}[key]}</label>`).join('')}
+                        </div></details>
+                    </div>`;
+            });
+            sel('add-speaker-btn').onclick = () => { state.speakers.push({ id: Date.now(), diameter: 100, x: 50, y: 50, name: ``, type: 'driver', panel: 'front', dimOptions: { diameter: true, fromTopEdge: true, fromBottomEdge: false, fromLeftEdge: true, fromRightEdge: false }}); update(); };
+            document.querySelectorAll('.remove-speaker-btn').forEach(b => b.onclick = e => { state.speakers = state.speakers.filter(s => s.id !== Number(e.target.dataset.id)); update(); });
+            document.querySelectorAll('.speaker-prop').forEach(el => {
+                const handler = e => {
+                    const { id, field } = e.target.dataset;
+                    const value = e.target.type.match(/range|number/) ? Number(e.target.value) : e.target.value;
+                    const spk = state.speakers.find(s => s.id === Number(id));
+                    if(spk) spk[field] = value;
+                    update();
+                };
+                el.oninput = handler;
+                if(el.type === 'text' || el.type === 'number' || el.tagName === 'SELECT') el.onchange = handler;
+            });
+            document.querySelectorAll('.speaker-dim-cb').forEach(cb => { cb.onchange = e => {
+                const { id, dimOption } = e.target.dataset;
+                const speaker = state.speakers.find(s => s.id === Number(id));
+                if(speaker) speaker.dimOptions[dimOption] = e.target.checked;
+                update();
+            }});
+            
+            const p = state.port;
+            let portHTML = `<div class="flex items-center justify-between mb-6"><h3 class="text-lg font-bold text-acc-text">バスレフポート</h3><label class="flex items-center cursor-pointer"><input type="checkbox" id="port-enabled" ${p.enabled ? 'checked' : ''} class="sr-only peer"><div class="relative w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-acc-primary"></div></label></div>`;
+            if (p.enabled) {
+                const dimOptions = p.dimOptions || { diameter: true, fromTopEdge: true, fromBottomEdge: false, fromLeftEdge: true, fromRightEdge: false };
+                portHTML += `<div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-xs mb-1 text-acc-text-light">直径(mm)</label><input type="number" data-field="diameter" value="${p.diameter}" class="port-prop w-full px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div>
+                        <div><label class="block text-xs mb-1 text-acc-text-light">長さ(mm)</label><input type="number" data-field="length" value="${p.length}" class="port-prop w-full px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div>
+                    </div>
+                     <div><label class="block text-xs mb-1 text-acc-text-light">配置</label><select data-field="panel" class="port-prop w-full px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"><option value="front" ${p.panel === 'front' ? 'selected' : ''}>前面</option><option value="back" ${p.panel === 'back' ? 'selected' : ''}>背面</option></select></div>
+                    <div class="mt-3"><label class="block text-xs mb-1 text-acc-text-light">X: ${p.x}%</label><div class="flex items-center gap-2"><input type="range" data-field="x" min="0" max="100" value="${p.x}" class="port-prop w-full"><input type="number" data-field="x" min="0" max="100" value="${p.x}" class="port-prop w-20 px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div></div>
+                    <div class="mt-3"><label class="block text-xs mb-1 text-acc-text-light">Y: ${p.y}%</label><div class="flex items-center gap-2"><input type="range" data-field="y" min="0" max="100" value="${p.y}" class="port-prop w-full"><input type="number" data-field="y" min="0" max="100" value="${p.y}" class="port-prop w-20 px-2 py-1 rounded border text-sm bg-white border-acc-border text-acc-text"></div></div>
+                    <details class="mt-3"><summary class="cursor-pointer text-sm font-medium text-acc-text-light hover:text-acc-text py-1">詳細な寸法設定</summary><div class="pt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+                        ${Object.keys(dimOptions).map(key => `<label class="flex items-center gap-1.5 text-sm text-acc-text-light"><input type="checkbox" data-dim-option="${key}" class="port-dim-cb w-4 h-4 rounded text-acc-primary" ${dimOptions[key] ? 'checked' : ''}>${{'diameter':'直径', 'fromTopEdge':'上から', 'fromBottomEdge':'下から', 'fromLeftEdge':'左から', 'fromRightEdge':'右から'}[key]}</label>`).join('')}
+                    </div></details>
+                </div>`;
+            }
+            elements.portSettingsCard.innerHTML = portHTML;
+            sel('port-enabled').onchange = e => { state.port.enabled = e.target.checked; update(); };
+            if(p.enabled) {
+                document.querySelectorAll('.port-prop').forEach(el => {
+                    const handler = e => {
+                        const field = e.target.dataset.field;
+                        const value = e.target.type.match(/range|number/) ? Number(e.target.value) : e.target.value;
+                        state.port[field] = value;
+                        update();
+                    };
+                    el.oninput = handler;
+                    if(el.tagName === 'SELECT' || el.type === 'number') el.onchange = handler;
+                });
+                 document.querySelectorAll('.port-dim-cb').forEach(cb => { cb.onchange = e => {
+                    state.port.dimOptions[e.target.dataset.dimOption] = e.target.checked;
+                    update();
+                }});
+            }
+        }
+        
+        function getSummaryHTML() {
+            const { calculations, dimensions, port } = state;
+            const summaryItem = (title, content) => `<div class="summary-item"><h4 class="font-semibold mb-2 text-acc-text">${title}</h4><div class="text-sm space-y-1 text-acc-text-light">${content}</div></div>`;
+            return `<div class="print-summary-section">
+                ${summaryItem('寸法', `<p>外寸: ${Math.round(dimensions.width)}×${Math.round(dimensions.height)}×${Math.round(dimensions.depth)}mm</p><p>内寸: ${Math.round(calculations.innerDimensions.width)}×${Math.round(calculations.innerDimensions.height)}×${Math.round(calculations.innerDimensions.depth)}mm</p>`)}
+                ${summaryItem('容積', `<p>総容積: ${calculations.volume.toFixed(2)}L</p><p>実効容積: ${calculations.netVolume.toFixed(2)}L</p>`)}
+                ${summaryItem('音響特性', `<p>${port.enabled && calculations.resonantFreq > 0 ? `共鳴周波数: ${calculations.resonantFreq.toFixed(1)}Hz` : '密閉型'}</p><p>材料面積: ${calculations.totalArea.toFixed(2)}m²</p>`)}
+            </div>`;
+        }
+        function getCuttingListHTML() {
+            const { calculations, boardThickness } = state;
+            const cuttingListItemsHTML = calculations.panels.map(p => `<div class="flex justify-between items-center py-1 px-2 rounded-lg bg-acc-bg my-0.5"><span class="font-semibold text-acc-text">${p.name}</span><div class="flex items-center gap-2"><span class="font-mono text-sm text-acc-text-light">${Math.round(p.width)}×${Math.round(p.height)}×${boardThickness}mm</span><span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-800">x${p.qty}</span></div></div>`).join('');
+            return `<div class="print-cutting-section mt-1">
+                <h4 class="font-semibold mb-1 text-acc-text">切断リスト</h4>
+                <div class="space-y-0.5">${cuttingListItemsHTML}</div>
+            </div>`;
+        }
+        
+        function getAssemblyDrawingHTML() {
+             const { calculations } = state;
+             const allHoles = [...state.speakers, ...(state.port.enabled ? [state.port] : [])];
+             let drawingHTML = calculations.panels.map(panel => {
+                const pW = panel.width, pH = panel.height;
+                const scale = 90 / Math.max(pW, pH, 1);
+                const w = pW * scale, h = pH * scale;
+                const holesSVG = allHoles.filter(hole => (panel.name.includes('前面') && hole.panel === 'front') || (panel.name.includes('背面') && hole.panel === 'back')).map(hole => {
+                    const cx = (hole.x / 100) * w; const cy = (hole.y / 100) * h; const r = (hole.diameter * scale) / 2;
+                    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${getUnitColor()}" stroke-width="1" ${!hole.type ? 'stroke-dasharray="2,2"' : ''}/>`;
+                }).join('');
+                return `<div class="border border-acc-border rounded-md flex flex-col items-center p-0.5">
+                            <h5 class="font-semibold text-center" style="font-size: 6pt; margin: 0;">${panel.name} (x${panel.qty})</h5>
+                            <svg viewBox="-1 -1 ${w+2} ${h+2}" class="bg-gray-50 rounded w-full h-auto flex-grow my-0.5"><rect x="0" y="0" width="${w}" height="${h}" fill="#f5e1c4" stroke="#a0522d" stroke-width="0.5"/>${holesSVG}</svg>
+                            <p class="text-center" style="font-size: 6pt; margin: 0;">${Math.round(pW)}x${Math.round(pH)}mm</p>
+                        </div>`;
+             }).join('');
+             return `<div class="h-full flex flex-col"><h3>組立図</h3><div class="flex-grow grid grid-cols-2 grid-rows-2 gap-1">${drawingHTML}</div></div>`;
+        }
+
+        function getOtherPanelsDrawingHTML() {
+            const { calculations } = state;
+            const sidePanel = calculations.panels.find(p => p.name === '側面板');
+            const topBottomPanel = calculations.panels.find(p => p.name === '上下面板');
+            let drawingsHTML = '';
+
+            const dimColor = '#212529';
+            const extColor = '#6c757d';
+
+            // 寸法線を描画する関数（簡略版）
+            const drawDimensions = (svgContent, w, h, pW, pH, margin) => {
+                // 水平寸法線（下側）
+                const hDim = `
+                    <g stroke="${dimColor}" stroke-width="0.8" fill="${dimColor}">
+                        <line x1="${margin}" y1="${margin + h + 10}" x2="${margin + w}" y2="${margin + h + 10}"/>
+                        <path d="M${margin+5},${margin + h + 7} L${margin},${margin + h + 10} L${margin+5},${margin + h + 13}" fill="none"/>
+                        <path d="M${margin + w - 5},${margin + h + 7} L${margin + w},${margin + h + 10} L${margin + w - 5},${margin + h + 13}" fill="none"/>
+                        <text x="${margin + w/2}" y="${margin + h + 25}" font-size="8" text-anchor="middle">${Math.round(pW)}</text>
+                    </g>`;
+                
+                // 垂直寸法線（左側）
+                const vDim = `
+                    <g stroke="${dimColor}" stroke-width="0.8" fill="${dimColor}">
+                        <line x1="${margin - 10}" y1="${margin}" x2="${margin - 10}" y2="${margin + h}"/>
+                        <path d="M${margin - 13},${margin + 5} L${margin - 10},${margin} L${margin - 7},${margin + 5}" fill="none"/>
+                        <path d="M${margin - 13},${margin + h - 5} L${margin - 10},${margin + h} L${margin - 7},${margin + h - 5}" fill="none"/>
+                        <text x="${margin - 25}" y="${margin + h/2}" font-size="8" text-anchor="middle" transform="rotate(-90, ${margin - 25}, ${margin + h/2})">${Math.round(pH)}</text>
+                    </g>`;
+                
+                return svgContent + hDim + vDim;
+            };
+
+            [sidePanel, topBottomPanel].forEach(panel => {
+                if (!panel) return;
+                const pW = panel.width, pH = panel.height;
+                const margin = 30;
+                const scale = 100 / Math.max(pW, pH, 1); 
+                const w = pW * scale, h = pH * scale;
+                
+                let svgContent = `<rect x="${margin}" y="${margin}" width="${w}" height="${h}" fill="none" stroke="#495057" stroke-width="2"/>`;
+                svgContent = drawDimensions(svgContent, w, h, pW, pH, margin);
+                
+                drawingsHTML += `
+                    <div class="flex flex-col items-center p-1 flex-grow justify-center">
+                        <h5 class="font-semibold text-center" style="font-size: 7pt; margin: 0 0 2px 0;">${panel.name} (x${panel.qty})</h5>
+                        <svg viewBox="0 0 ${w + margin*2} ${h + margin*2}" class="bg-white rounded w-auto h-full" style="max-height: 80%;">
+                            ${svgContent}
+                        </svg>
+                    </div>
+                `;
+            });
+            
+            return `<div class="h-full flex flex-col">
+                        <h3>部材図 (その他)</h3>
+                        <div class="flex-grow flex flex-row gap-2">${drawingsHTML}</div>
+                    </div>`;
+        }
+        
+        function getTechnicalDrawingHTML(panelType, forPrint = false) {
+             const originalSelectedPanel = state.selectedPanel;
+            state.selectedPanel = panelType;
+            const html = renderTechnicalDrawing(forPrint);
+            state.selectedPanel = originalSelectedPanel;
+            return `<div class="technical-drawing-section h-full flex flex-col">${html}</div>`;
+        }
+
+        function renderMainContent() {
+            const { activeTab, selectedPanel } = state;
+            const summaryHTML = `<section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">${getSummaryHTML()}</section>`;
+            if (activeTab === 'design') {
+                const cuttingListHTML = `<section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">${getCuttingListHTML()}</section>`;
+                elements.mainContent.innerHTML = summaryHTML + cuttingListHTML;
+            } else {
+                const panelTypes = {'assembly':'組立図', 'front':'前面板', 'back':'背面板', 'side':'側面板', 'top-bottom':'上下板'};
+                const panelSelectorHTML = `<section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-acc-text">表示選択</h3>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${Object.keys(panelTypes).map(p => `<button data-panel="${p}" class="panel-btn p-4 rounded-xl text-left transition-all duration-300 border ${p === selectedPanel ? 'bg-acc-primary text-acc-primary-text border-transparent shadow-lg scale-105' : 'bg-white text-acc-text hover:bg-gray-50 border-acc-border'}">${panelTypes[p]}</button>`).join('')}</div>
+                </section>`;
+                let contentHTML = (selectedPanel === 'assembly') ? `<section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">${getAssemblyDrawingHTML()}</section>` : renderTechnicalDrawingWithOptions();
+                elements.mainContent.innerHTML = summaryHTML + panelSelectorHTML + contentHTML;
+                
+                document.querySelectorAll('.panel-btn').forEach(btn => btn.onclick = () => { state.selectedPanel = btn.dataset.panel; update(); });
+            }
+        }
+        
+        function renderTechnicalDrawingWithOptions() {
+            const dimensionOptionsHTML = `
+                <section class="p-6 rounded-2xl bg-acc-surface border border-acc-border shadow-sm">
+                    <h3 class="text-lg font-bold mb-4 text-acc-text">グローバル寸法設定</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <label class="flex items-center gap-2 text-sm text-acc-text-light cursor-pointer">
+                            <input type="checkbox" id="global-hole-to-hole-cb" class="w-4 h-4 text-acc-primary bg-gray-100 border-acc-border rounded" ${state.globalDimensionOptions.holeToHole ? 'checked' : ''}>
+                            穴の間隔
+                        </label>
+                    </div>
+                </section>`;
+            const technicalDrawingHTML = `<section class="h-full bg-acc-surface border border-acc-border rounded-2xl p-4">${renderTechnicalDrawing()}</section>`;
+            const finalHTML = dimensionOptionsHTML + technicalDrawingHTML;
+            setTimeout(() => { sel('global-hole-to-hole-cb').onchange = e => { state.globalDimensionOptions.holeToHole = e.target.checked; update(); }; }, 0);
+            return finalHTML;
+        }
+        
+        function renderTechnicalDrawing(forPrint = false) {
+            const { dimensions, boardThickness, speakers, port, selectedPanel, globalDimensionOptions } = state;
+            let pW, pH, pLabel = '';
+            switch (selectedPanel) {
+                case 'front': case 'back': pW = dimensions.width; pH = dimensions.height; pLabel = {front:'前面板', back:'背面板'}[selectedPanel]; break;
+                case 'side': pW = dimensions.depth; pH = dimensions.height; pLabel = '側面板'; break;
+                case 'top-bottom': pW = dimensions.width - 2 * boardThickness; pH = dimensions.depth; pLabel = '上下面板'; break;
+                default: return '';
+            }
+            const allHoles = [...speakers.filter(s => s.panel === selectedPanel), ...(port.enabled && port.panel === selectedPanel ? [port] : [])].sort((a,b) => a.y - b.y);
+            
+            const margin = forPrint ? 50 : 100;
+            const viewboxScale = 400;
+            const scale = viewboxScale / Math.max(pW, pH, 1);
+            
+            const w = pW * scale, h = pH * scale;
+            let dimensionSVG = '';
+            const dimColor = '#212529';
+            const extColor = '#6c757d';
+
+            const drawVdim = (dimLineX, extLineStartX, y1, y2, text, align = 'end') => {
+                const tx = align === 'end' ? dimLineX - 12 : dimLineX + 12;
+                const ty = (y1 + y2) / 2;
+                const rotationTransform = `transform="rotate(-90, ${tx}, ${ty})"`;
+
+                return `
+                    <g class="dimension-group">
+                        <g stroke="${extColor}" stroke-width="0.5">
+                            <line x1="${extLineStartX}" y1="${y1}" x2="${dimLineX}" y2="${y1}" />
+                            <line x1="${extLineStartX}" y1="${y2}" x2="${dimLineX}" y2="${y2}" />
+                        </g>
+                        <g stroke="${dimColor}" stroke-width="0.8" fill="${dimColor}">
+                            <line x1="${dimLineX}" y1="${y1}" x2="${dimLineX}" y2="${y2}" />
+                            <path d="M${dimLineX-3},${y1+5} L${dimLineX},${y1} L${dimLineX+3},${y1+5}" fill="none"/>
+                            <path d="M${dimLineX-3},${y2-5} L${dimLineX},${y2} L${dimLineX+3},${y2-5}" fill="none"/>
+                            <text x="${tx}" y="${ty}" font-size="8" text-anchor="middle" alignment-baseline="middle" ${rotationTransform}>${text}</text>
+                        </g>
+                    </g>`;
+            };
+
+            const drawHdim = (dimLineY, extLineStartY, x1, x2, text, align = 'top') => {
+                return `
+                    <g class="dimension-group">
+                        <g stroke="${extColor}" stroke-width="0.5">
+                            <line x1="${x1}" y1="${extLineStartY}" x2="${x1}" y2="${dimLineY}" />
+                            <line x1="${x2}" y1="${extLineStartY}" x2="${x2}" y2="${dimLineY}" />
+                        </g>
+                        <g stroke="${dimColor}" stroke-width="0.8" fill="${dimColor}">
+                            <line x1="${x1}" y1="${dimLineY}" x2="${x2}" y2="${dimLineY}" />
+                            <path d="M${x1+5},${dimLineY-3} L${x1},${dimLineY} L${x1+5},${dimLineY+3}" fill="none"/>
+                            <path d="M${x2-5},${dimLineY-3} L${x2},${dimLineY} L${x2-5},${dimLineY+3}" fill="none"/>
+                            <text x="${(x1+x2)/2}" y="${align === 'top' ? dimLineY-8 : dimLineY+18}" font-size="8" text-anchor="middle">${text}</text>
+                        </g>
+                    </g>`;
+            };
+
+            let leftVOffset = margin - 30;
+            let topHOffset = margin - 30;
+            let rightVOffset = margin + w + 30;
+            let bottomHOffset = margin + h + 30;
+
+            allHoles.forEach(hole => {
+                const dimOpts = hole.dimOptions || {};
+                const cx = margin + (hole.x / 100) * w;
+                const cy = margin + (hole.y / 100) * h;
+                const r = (hole.diameter / 2) * scale;
+                if (dimOpts.fromTopEdge) { dimensionSVG += drawVdim(leftVOffset, cx, margin, cy, Math.round(hole.y / 100 * pH)); leftVOffset -= 25; }
+                if (dimOpts.fromLeftEdge) { dimensionSVG += drawHdim(topHOffset, cy, margin, cx, Math.round(hole.x / 100 * pW)); topHOffset -= 25; }
+                if (dimOpts.fromBottomEdge) { dimensionSVG += drawVdim(rightVOffset, cx, cy, margin + h, Math.round(pH - (hole.y / 100 * pH)), 'start'); rightVOffset += 25; }
+                if (dimOpts.fromRightEdge) { dimensionSVG += drawHdim(bottomHOffset, cy, cx, margin + w, Math.round(pW - (hole.x / 100 * pW)), 'bottom'); bottomHOffset += 25; }
+                if (dimOpts.diameter) { dimensionSVG += `<g stroke="${dimColor}" stroke-width="0.8" fill="${dimColor}"><line x1="${cx-r}" y1="${cy}" x2="${cx+r}" y2="${cy}"/><path d="M${cx-r},${cy-3} L${cx-r+5},${cy} L${cx-r},${cy+3}" fill="none"/><path d="M${cx+r},${cy-3} L${cx+r-5},${cy} L${cx+r},${cy+3}" fill="none"/><text x="${cx}" y="${cy-10}" font-size="8" text-anchor="middle">φ${hole.diameter}</text></g>`; }
+            });
+
+            const holeToHoleEnabled = forPrint || globalDimensionOptions.holeToHole;
+            if (holeToHoleEnabled && allHoles.length > 1) {
+                for (let i = 0; i < allHoles.length - 1; i++) {
+                    const hole1 = allHoles[i], hole2 = allHoles[i+1];
+                    const cx1 = margin + (hole1.x / 100) * w;
+                    const cy1 = margin + (hole1.y / 100) * h;
+                    const cy2 = margin + (hole2.y / 100) * h;
+                    const val = Math.round(Math.abs((hole2.y / 100 * pH) - (hole1.y / 100 * pH)));
+                    if (val > 0) { dimensionSVG += drawVdim(leftVOffset, cx1, cy1, cy2, val); }
+                }
+            }
+            
+            dimensionSVG += drawHdim(margin - 10, margin, margin, margin + w, Math.round(pW));
+            dimensionSVG += drawVdim(margin - 10, margin, margin, margin + h, Math.round(pH));
+
+            const holesSVG = allHoles.map(hole => {
+                const cx = margin + (hole.x / 100) * w; const cy = margin + (hole.y / 100) * h; const r = (hole.diameter / 2) * scale;
+                const holeName = hole.name || (hole.type ? 'スピーカー' : 'ポート');
+                return `<g><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${dimColor}" stroke-width="2" ${!hole.type ? 'stroke-dasharray="5,5"' : ''}></circle><text x="${cx}" y="${cy - r - 8}" font-size="9" fill="${dimColor}" text-anchor="middle">${holeName}</text></g>`;
+            }).join('');
+
+            // 印刷時は背景なし、画面表示時のみ白い背景
+            const backgroundAndDefs = forPrint ? '' : `<rect width="100%" height="100%" fill="#ffffff"></rect>`;
+
+            // 常にパネルの外枠線を表示する
+            const panelRect = `<rect x="${margin}" y="${margin}" width="${w}" height="${h}" fill="none" stroke="#495057" stroke-width="2"/>`;
+
+            return `<div class="flex-shrink-0 flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-lg text-acc-text">${pLabel} 加工図</h3>
+                    </div>
+                    <div class="flex-grow min-h-0">
+                        <svg width="100%" height="100%" viewBox="0 0 ${w + margin*2} ${h + margin*2}" class="rounded-lg" ${!forPrint ? 'style="background-color: #ffffff;"' : ''}>
+                            ${backgroundAndDefs}
+                            <g>
+                                ${panelRect}
+                                ${holesSVG}
+                                ${dimensionSVG}
+                            </g>
+                        </svg>
+                    </div>`;
+        }
+
+        function update(options = {}) {
+            calculateAll(options);
+            const { dimensions, boardThickness, targetVolume, locks, activeTab } = state;
+            elements.boardThicknessValue.textContent = `${boardThickness}mm`;
+            elements.boardThicknessSlider.value = boardThickness;
+            elements.targetVolumeValue.textContent = `${targetVolume.toFixed(1)}L`;
+            elements.targetVolumeSlider.value = targetVolume;
+            ['width', 'height', 'depth'].forEach(dim => {
+                elements[dim].slider.value = dimensions[dim];
+                elements[dim].input.value = Math.round(dimensions[dim]);
+                elements[dim].lock.innerHTML = locks[dim] ? icons.lock : icons.unlock;
+                elements[dim].slider.disabled = locks[dim];
+                elements[dim].input.disabled = locks[dim];
+                elements[dim].lock.className = `p-2 rounded-lg transition-all ${locks[dim] ? 'bg-acc-accent text-acc-accent-text shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`;
+            });
+            const activeCls = 'flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 bg-acc-primary text-acc-primary-text shadow-md';
+            const inactiveCls = 'flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 bg-acc-surface text-acc-text hover:bg-gray-50 border border-acc-border';
+            elements.tabDesign.className = activeTab === 'design' ? activeCls : inactiveCls;
+            elements.tabTechnical.className = activeTab === 'technical' ? activeCls : inactiveCls;
+            elements.tabDesign.innerHTML = `${icons.settings} 基本設計`;
+            elements.tabTechnical.innerHTML = `${icons.calculator} 詳細図面`;
+            renderSettings();
+            renderMainContent();
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedState = JSON.parse(e.target.result);
+                    if (importedState.dimensions && importedState.speakers) {
+                        state = importedState;
+                        update();
+                        console.log('デザインを読み込みました。');
+                    } else {
+                         console.error('無効なファイル形式です。');
+                    }
+                } catch (error) {
+                    console.error("JSONの読み込みに失敗しました:", error);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function exportJSON() {
+            const dataStr = JSON.stringify(state, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = `speaker-design-${new Date().toISOString().slice(0,10)}.json`;
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+        
+        function printDesign() {
+            const memoHTML = `
+                <div class="print-memo-section">
+                    <h4>メモ</h4>
+                    <div style="border: 1px solid #999; height: 100%; border-radius: 4px;"></div>
+                </div>`;
+
+            const printContent = `
+                <div class="print-grid">
+                    <div class="print-section" style="display: flex; flex-direction: column;">
+                        <div class="print-info-area">
+                            ${getSummaryHTML()}
+                            ${getCuttingListHTML()}
+                        </div>
+                        ${memoHTML}
+                    </div>
+                    <div class="print-section">
+                        ${getOtherPanelsDrawingHTML()}
+                    </div>
+                    <div class="print-section">
+                        ${getTechnicalDrawingHTML('front', true)}
+                    </div>
+                    <div class="print-section">
+                        ${getTechnicalDrawingHTML('back', true)}
+                    </div>
+                </div>
+            `;
+            
+            const printArea = document.createElement('div');
+            printArea.id = "print-area";
+            printArea.innerHTML = printContent;
+            document.body.appendChild(printArea);
+            
+            setTimeout(() => {
+                window.print();
+                document.body.removeChild(printArea);
+            }, 500);
+        }
+
+        // 初期化処理
+        addEventListeners();
+        update();
+    });
+  </script>
+</body>
+</html>
