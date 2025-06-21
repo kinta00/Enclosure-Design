@@ -396,7 +396,7 @@
             const summaryItem = (title, content) => `<div class="summary-item"><h4 class="font-semibold mb-2 text-acc-text">${title}</h4><div class="text-sm space-y-1 text-acc-text-light">${content}</div></div>`;
             return `<div class="print-summary-section">
                 ${summaryItem('寸法', `<p>外寸: ${Math.round(dimensions.width)}×${Math.round(dimensions.height)}×${Math.round(dimensions.depth)}mm</p><p>内寸: ${Math.round(calculations.innerDimensions.width)}×${Math.round(calculations.innerDimensions.height)}×${Math.round(calculations.innerDimensions.depth)}mm</p>`)}
-                ${summaryItem('容積', `<p>総容積: ${calculations.volume.toFixed(2)}L</p><p>実効容積: ${calculations.netVolume.toFixed(2)}L</p>`)}
+                ${summaryItem('容積', `<p>総容積: ${calculations.volume.toFixed(2)}L</p><p>実効容積: ${calculations.netVolume.toFixed(2)}L <span class="text-xs text-acc-accent-text bg-acc-accent px-1 rounded-full ml-1">※目安</span></p>`)}
                 ${summaryItem('音響特性', `<p>${port.enabled && calculations.resonantFreq > 0 ? `共鳴周波数: ${calculations.resonantFreq.toFixed(1)}Hz` : '密閉型'}</p><p>材料面積: ${calculations.totalArea.toFixed(2)}m²</p>`)}
             </div>`;
         }
