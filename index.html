@@ -542,7 +542,10 @@
                 case 'top-bottom': pW = dimensions.width - 2 * boardThickness; pH = dimensions.depth; pLabel = '上下面板'; break;
                 default: return '';
             }
-            const allHoles = [...speakers.filter(s => s.panel === selectedPanel), ...(port.enabled && port.panel === selectedPanel ? [port] : [])].sort((a,b) => a.y - b.y);
+            const allHoles = [...speakers.filter(s => s.panel === selectedPanel), ...(port.enabled && port.panel === selectedPanel ? [port] : [])].sort((a,b) => {
+                if (a.y === b.y) return a.x - b.x; // Y座標が同じ場合はX座標でソート
+                return a.y - b.y;
+            });
             
             const margin = forPrint ? 50 : 100;
             const viewboxScale = 400;
