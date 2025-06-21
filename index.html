@@ -333,8 +333,19 @@
                     if(spk) spk[field] = value;
                     update();
                 };
-                el.oninput = handler;
-                if(el.type === 'text' || el.type === 'number' || el.tagName === 'SELECT') el.onchange = handler;
+                
+                // テキスト入力の場合はフォーカスが外れた時に更新 (onchange)
+                if (el.type === 'text') {
+                    el.onchange = handler;
+                } 
+                // それ以外の要素はリアルタイムで更新 (oninput)
+                else {
+                    el.oninput = handler;
+                    // 数値入力やセレクトボックスは onchange でも更新をかける
+                    if(el.type === 'number' || el.tagName === 'SELECT') {
+                       el.onchange = handler;
+                    }
+                }
             });
             document.querySelectorAll('.speaker-dim-cb').forEach(cb => { cb.onchange = e => {
                 const { id, dimOption } = e.target.dataset;
